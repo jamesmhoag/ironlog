@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<title>IronLog</title>
+<meta name="description" content="A gym log for plans, challenges, workouts, and exercises." />
+
+<!-- PWA metadata -->
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#121212" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="IronLog" />
+<link rel="apple-touch-icon" href="icon-192.png" />
+<link rel="icon" href="icon-192.png" />
+
+<!-- Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+<!-- React + ReactDOM (UMD) -->
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+
+<style>
+  html, body { margin: 0; padding: 0; background: #121212; }
+  #root { min-height: 100vh; }
+  /* Basic splash while scripts load */
+  .boot-loading { display: flex; align-items: center; justify-content: center; min-height: 100vh; color: #8f8a80; font-family: -apple-system, sans-serif; font-size: 14px; }
+</style>
+</head>
+<body>
+<div id="root"><div class="boot-loading">Loading IronLog…</div></div>
+
+<script src="icons.js"></script>
+<script src="chart.js"></script>
+<script src="app.js"></script>
+
+<script>
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("sw.js").catch((err) => {
+        console.warn("Service worker registration failed:", err);
+      });
+    });
+  }
+</script>
+</body>
+</html>
