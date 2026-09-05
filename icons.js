@@ -109,6 +109,23 @@
   const CheckIcon = Check;
   const ChevronRight = (p) => Icon({ ...p, children: [Pl("9 18 15 12 9 6", "a")] });
   const ChevronLeft = (p) => Icon({ ...p, children: [Pl("15 18 9 12 15 6", "a")] });
+  const PauseIcon = (p) => Icon({ ...p, children: [Rc(6, 4, 4, 16, 1, "a"), Rc(14, 4, 4, 16, 1, "b")] });
+  const SkipForwardIcon = (p) => Icon({ ...p, children: [P("M5 4v16l12-8z", "a"), Ln(19, 5, 19, 19, "b")] });
+  const Volume2 = (p) => Icon({ ...p, children: [
+    P("M11 5 6 9H3v6h3l5 4V5z", "a"),
+    P("M15.5 8.5a5 5 0 0 1 0 7", "b"),
+    P("M18.5 5.5a9 9 0 0 1 0 13", "c")
+  ] });
+  const VolumeX = (p) => Icon({ ...p, children: [
+    P("M11 5 6 9H3v6h3l5 4V5z", "a"),
+    Ln(23, 9, 17, 15, "b"),
+    Ln(17, 9, 23, 15, "c")
+  ] });
+  const Minus = (p) => Icon({ ...p, children: [Ln(5, 12, 19, 12, "a")] });
+  const Copy = (p) => Icon({ ...p, children: [
+    Rc(9, 9, 13, 13, 2, "a"),
+    P("M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1", "b")
+  ] });
   window.Dumbbell = Dumbbell;
   window.Play = Play;
   window.Check = Check;
@@ -137,4 +154,10 @@
   window.CheckIcon = CheckIcon;
   window.ChevronRight = ChevronRight;
   window.ChevronLeft = ChevronLeft;
+  window.PauseIcon = PauseIcon;
+  window.SkipForwardIcon = SkipForwardIcon;
+  window.Volume2 = Volume2;
+  window.VolumeX = VolumeX;
+  window.Minus = Minus;
+  window.Copy = Copy;
 })();
