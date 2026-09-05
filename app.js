@@ -695,18 +695,97 @@
      ============================================================ */
 
   const STORE_KEY = "workout-app-state-v4";
+  const IDB_NAME = "ironlog-db";
+  const IDB_STORE = "state";
+
+  // IndexedDB is the durable layer: browsers (especially Chrome on Android)
+  // treat localStorage as more evictable under storage pressure than
+  // IndexedDB, which is the documented cause of installed-PWA data quietly
+  // disappearing. We write to both and prefer IndexedDB on read, with
+  // localStorage as a same-tab-speed fallback.
+  function openIDB() {
+    return new Promise(resolve => {
+      if (typeof indexedDB === "undefined") {
+        resolve(null);
+        return;
+      }
+      try {
+        const req = indexedDB.open(IDB_NAME, 1);
+        req.onupgradeneeded = () => {
+          req.result.createObjectStore(IDB_STORE);
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => resolve(null);
+      } catch (e) {
+        resolve(null);
+      }
+    });
+  }
+  async function idbGet(key) {
+    const db = await openIDB();
+    if (!db) return null;
+    return new Promise(resolve => {
+      try {
+        const tx = db.transaction(IDB_STORE, "readonly");
+        const req = tx.objectStore(IDB_STORE).get(key);
+        req.onsuccess = () => resolve(req.result ?? null);
+        req.onerror = () => resolve(null);
+      } catch (e) {
+        resolve(null);
+      }
+    });
+  }
+  async function idbSet(key, value) {
+    const db = await openIDB();
+    if (!db) return false;
+    return new Promise(resolve => {
+      try {
+        const tx = db.transaction(IDB_STORE, "readwrite");
+        tx.objectStore(IDB_STORE).put(value, key);
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+      } catch (e) {
+        resolve(false);
+      }
+    });
+  }
   async function loadState() {
+    let raw = null;
     try {
-      const res = await window.storage.get(STORE_KEY);
-      if (res && res.value) return migrateState(JSON.parse(res.value));
+      raw = await idbGet(STORE_KEY);
     } catch (e) {}
-    return null;
+    if (!raw) {
+      try {
+        raw = window.localStorage.getItem(STORE_KEY);
+      } catch (e) {}
+    }
+    if (!raw) return null; // genuinely nothing saved anywhere yet
+    try {
+      return migrateState(JSON.parse(raw));
+    } catch (e) {
+      // Something's saved but we couldn't parse/migrate it. Never silently
+      // discard it — keep the raw copy under a backup key so it's recoverable,
+      // and surface the failure instead of letting the caller treat this as
+      // "no data" (which would otherwise get immediately overwritten with a
+      // blank default on the very next save).
+      console.error("loadState: saved data failed to parse/migrate, preserving raw backup", e);
+      try {
+        window.localStorage.setItem(STORE_KEY + ".corrupt-backup." + Date.now(), raw);
+      } catch (e2) {}
+      throw e;
+    }
   }
   async function saveState(state) {
+    const json = JSON.stringify(state);
     try {
-      await window.storage.set(STORE_KEY, JSON.stringify(state));
+      window.localStorage.setItem(STORE_KEY, json);
     } catch (e) {
-      console.error("save failed", e);
+      console.error("localStorage save failed", e);
+    }
+    try {
+      await idbSet(STORE_KEY, json);
+    } catch (e) {
+      console.error("indexedDB save failed", e);
     }
   }
 
@@ -4415,6 +4494,66 @@
     label: "Log",
     icon: NotebookPen
   }];
+
+  // Temporary on-device diagnostics strip — lets us see, without a computer,
+  // whether storage writes/reads actually work on this device/browser, what's
+  // currently saved, and which service-worker cache version is actually
+  // controlling the page. Safe to remove once persistence issues are resolved.
+  function DiagnosticsBar() {
+    const [info, setInfo] = useState({
+      loading: true
+    });
+    const [open, setOpen] = useState(false);
+    useEffect(() => {
+      (async () => {
+        const out = {};
+        out.origin = window.location.origin + window.location.pathname;
+        try {
+          window.localStorage.setItem("__diag_probe__", "1");
+          out.storageWrite = window.localStorage.getItem("__diag_probe__") === "1";
+          window.localStorage.removeItem("__diag_probe__");
+        } catch (e) {
+          out.storageWrite = false;
+          out.storageError = e.message;
+        }
+        try {
+          const raw = window.localStorage.getItem(STORE_KEY);
+          out.savedLength = raw ? raw.length : 0;
+        } catch (e) {
+          out.savedLength = "error: " + e.message;
+        }
+        try {
+          out.cacheNames = "caches" in window ? await window.caches.keys() : ["caches API unavailable"];
+        } catch (e) {
+          out.cacheNames = ["error: " + e.message];
+        }
+        out.swController = navigator.serviceWorker && navigator.serviceWorker.controller ? navigator.serviceWorker.controller.scriptURL : "none (page not controlled by a service worker)";
+        out.loading = false;
+        setInfo(out);
+      })();
+    }, []);
+    if (info.loading) return null;
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 10,
+        fontFamily: "monospace",
+        color: "#8f8a80",
+        padding: "4px 12px",
+        borderBottom: "1px solid #2a2a2d",
+        background: "#161617"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      onClick: () => setOpen(!open),
+      style: {
+        cursor: "pointer"
+      }
+    }, "\u{1F527}", " diag: storage=", info.storageWrite ? "ok" : "FAIL", " saved=", info.savedLength, "b cache=[", (info.cacheNames || []).join(",") || "none", "] ", open ? "\u25B2" : "\u25BC"), open && /*#__PURE__*/React.createElement("div", {
+      style: {
+        marginTop: 4,
+        whiteSpace: "pre-wrap"
+      }
+    }, "origin: ", info.origin, "\n", "storage write/read: ", String(info.storageWrite), info.storageError ? " (" + info.storageError + ")" : "", "\n", "saved state bytes: ", String(info.savedLength), "\n", "cache buckets: ", (info.cacheNames || []).join(", ") || "none", "\n", "sw controller: ", info.swController));
+  }
   function App() {
     const [state, setState] = useState(null);
     const [tab, setTab] = useState("workouts");
@@ -4422,9 +4561,23 @@
     const [confirmingReset, setConfirmingReset] = useState(false);
     const [historyPreselectPlan, setHistoryPreselectPlan] = useState(null);
     useEffect(() => {
+      // Ask the browser not to evict this origin's storage under pressure —
+      // the documented cause of installed PWAs on Android losing data even
+      // though the save code itself is correct.
+      if (navigator.storage && navigator.storage.persist) {
+        navigator.storage.persist().catch(() => {});
+      }
       (async () => {
-        const loaded = await loadState();
-        setState(loaded || defaultState());
+        try {
+          const loaded = await loadState();
+          setState(loaded || defaultState());
+        } catch (e) {
+          // loadState threw because saved data existed but couldn't be
+          // read/migrated. The raw data was already preserved under a backup
+          // key by loadState itself — show a default here so the app is
+          // usable, but do NOT treat this the same as a first-ever launch.
+          setState(defaultState());
+        }
         setLoading(false);
       })();
     }, []);
@@ -4461,7 +4614,7 @@
       "aria-label": "Reset data"
     }, /*#__PURE__*/React.createElement(RotateCcw, {
       size: 16
-    }))), /*#__PURE__*/React.createElement("main", {
+    }))), /*#__PURE__*/React.createElement(DiagnosticsBar, null), /*#__PURE__*/React.createElement("main", {
       className: "app-main"
     }, tab === "workouts" && /*#__PURE__*/React.createElement(WorkoutsView, {
       state: state,
